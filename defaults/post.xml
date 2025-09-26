@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uplg_items>
+  <item>
+    <post>
+      <title>Exemple d’article</title>
+      <slug>exemple-article</slug>
+      <status>draft</status>
+      <content><![CDATA[Contenu par défaut de l’article.]]></content>
+    </post>
+    <meta>
+      <meta_key name="_uplg_file_name"><![CDATA[exemple-article]]></meta_key>
+      <meta_key name="_uplg_php_code"><![CDATA[<?php
+// Exemple de code
+add_action('init', function(){ /* ... */ });
+]]></meta_key>
+      <meta_key name="_uplg_js_code"><![CDATA[console.log('hello');]]></meta_key>
+      <meta_key name="_uplg_scss_code"><![CDATA[.example { color: #333; }]]></meta_key>
+      <meta_key name="_uplg_generate_php_file">1</meta_key>
+      <meta_key name="_uplg_generate_js_file">1</meta_key>
+      <meta_key name="_uplg_generate_scss_file">0</meta_key>
+      <meta_key name="_uplg_generate_css_file">1</meta_key>
+    </meta>
+  </item>
+</uplg_items>
