@@ -9,6 +9,8 @@ class UpLibraryGenerator {
     private $option_key = 'uplg_settings';
     private $opts = [];
     private $config_map = []; // [cpt => config array]
+    private $gb_disabled = [];
+    private $gb_filter_added = false;
 
     public static function instance(): self {
         if (!self::$instance) {
@@ -23,12 +25,21 @@ class UpLibraryGenerator {
             'post_status' => 'any',
             'posts_per_page' => -1,
         ]);
+        $this->gb_disabled = [];
         foreach ($defs as $def) {
             $slug = sanitize_title(get_post_meta($def->ID, '_uplg_cpt_slug', true));
             if (!$slug) { continue; }
             $reg  = 'up_' . $slug;
             $sing = get_post_meta($def->ID, '_uplg_cpt_singular', true) ?: ucfirst($slug);
             $plur = get_post_meta($def->ID, '_uplg_cpt_plural', true) ?: $sing . 's';
+            $gb   = get_post_meta($def->ID, '_uplg_cpt_gutenberg', true);
+            $gb_enabled = ($gb === '' || $gb === '1');
+            if (!$gb_enabled) { $this->gb_disabled[] = $reg; }
+            $dis_editor = get_post_meta($def->ID, '_uplg_cpt_disable_editor', true) === '1';
+            $dis_custom = get_post_meta($def->ID, '_uplg_cpt_disable_custom_fields', true) === '1';
+            $supports = ['title'];
+            if (!$dis_editor) { $supports[] = 'editor'; }
+            if (!$dis_custom) { $supports[] = 'custom-fields'; }
             register_post_type($reg, [
                 'label' => $plur,
                 'labels' => [ 'name' => $plur, 'singular_name' => $sing ],
@@ -36,12 +47,19 @@ class UpLibraryGenerator {
                 'publicly_queryable' => false,
                 'show_ui' => true,
                 'show_in_menu' => 'uplg-main',
-                'show_in_rest' => true,
+                'show_in_rest' => $gb_enabled,
                 'rest_base' => $reg,
-                'supports' => ['title','editor','custom-fields'],
+                'supports' => $supports,
                 'has_archive' => false,
                 'rewrite' => false,
             ]);
+        }
+        if (!$this->gb_filter_added) {
+            add_filter('use_block_editor_for_post_type', function($use_block_editor, $post_type){
+                if (in_array($post_type, $this->gb_disabled, true)) { return false; }
+                return $use_block_editor;
+            }, 10, 2);
+            $this->gb_filter_added = true;
         }
     }
 
@@ -50,12 +68,19 @@ class UpLibraryGenerator {
         $slug = get_post_meta($post->ID, '_uplg_cpt_slug', true);
         $sing = get_post_meta($post->ID, '_uplg_cpt_singular', true);
         $plur = get_post_meta($post->ID, '_uplg_cpt_plural', true);
+        $gb   = get_post_meta($post->ID, '_uplg_cpt_gutenberg', true);
+        if ($gb === '') { $gb = '1'; }
+        $dis_editor = get_post_meta($post->ID, '_uplg_cpt_disable_editor', true) === '1';
+        $dis_custom = get_post_meta($post->ID, '_uplg_cpt_disable_custom_fields', true) === '1';
         echo '<p><label><strong>' . esc_html__('Slug (sans préfixe)', 'up-library-generator') . '</strong><br />';
         echo '<input type="text" name="_uplg_cpt_slug" value="' . esc_attr($slug) . '" class="regular-text" placeholder="ex: produit" /></label></p>';
         echo '<p><label><strong>' . esc_html__('Label singulier', 'up-library-generator') . '</strong><br />';
         echo '<input type="text" name="_uplg_cpt_singular" value="' . esc_attr($sing) . '" class="regular-text" placeholder="ex: Produit" /></label></p>';
         echo '<p><label><strong>' . esc_html__('Label pluriel', 'up-library-generator') . '</strong><br />';
         echo '<input type="text" name="_uplg_cpt_plural" value="' . esc_attr($plur) . '" class="regular-text" placeholder="ex: Produits" /></label></p>';
+        echo '<p><label><input type="checkbox" name="_uplg_cpt_gutenberg" ' . checked($gb, '1', false) . ' /> ' . esc_html__('Activer l’éditeur de blocs (Gutenberg) pour ce CPT', 'up-library-generator') . '</label></p>';
+        echo '<p><label><input type="checkbox" name="_uplg_cpt_disable_editor" ' . checked($dis_editor, true, false) . ' /> ' . esc_html__('Désactiver l’éditeur de contenu', 'up-library-generator') . '</label></p>';
+        echo '<p><label><input type="checkbox" name="_uplg_cpt_disable_custom_fields" ' . checked($dis_custom, true, false) . ' /> ' . esc_html__('Désactiver les champs personnalisés (custom fields)', 'up-library-generator') . '</label></p>';
         echo '<p class="description">' . esc_html__('Le CPT sera enregistré sous le slug : up_<slug>. Accès REST activé, pas de pages publiques, visible dans le sous-menu UP Tools.', 'up-library-generator') . '</p>';
     }
 
@@ -426,7 +451,7 @@ class UpLibraryGenerator {
                         $subp_val = get_post_meta($post->ID, $subp_key, true) ?: '';
                         echo '<div style="margin-top:8px;">';
                         echo '<label>' . esc_html__('Emplacement', 'up-library-generator') . ' ';
-                        echo '<select name="' . esc_attr($base_key) . '">';
+                        echo '<select name="' . esc_attr($base_key) . '" data-uplg-base-select="1">';
                         $bases = ['' => __('— par défaut —', 'up-library-generator'), 'theme' => __('Thème actif', 'up-library-generator'), 'mu-plugins' => __('MU-plugins', 'up-library-generator'), 'plugin' => __('Ce plugin', 'up-library-generator'), 'custom' => __('Chemin personnalisé', 'up-library-generator')];
                         foreach ($bases as $bv => $bl) {
                             echo '<option value="' . esc_attr($bv) . '" ' . selected($base_val, $bv, false) . '>' . esc_html($bl) . '</option>';
@@ -434,6 +459,12 @@ class UpLibraryGenerator {
                         echo '</select>';
                         echo '</label> ';
                         echo '<label>' . esc_html__('Sous-chemin/chemin', 'up-library-generator') . ' <input type="text" name="' . esc_attr($subp_key) . '" value="' . esc_attr($subp_val) . '" placeholder="library/my-block" size="30" /></label>';
+                        // Default path preview when base is default
+                        $default_target = $this->build_default_code_target($conf, $post, ($file_name ?: ('item-' . $post->ID)), $lang);
+                        $default_pretty = $this->pretty_path($default_target);
+                        echo '<div class="description uplg-default-path" ' . ($base_val === '' ? '' : 'style="display:none"') . '>'
+                            . esc_html(sprintf(__('Chemin par défaut: %s', 'up-library-generator'), $default_pretty))
+                            . '</div>';
                         echo '</div>';
                     }
                 }
@@ -443,6 +474,14 @@ class UpLibraryGenerator {
         // Legacy fixed code fields (optional): keep after schema-based
         // Legacy fixed code fields removed: use dynamic schema instead.
         echo '</div>'; // grid
+        // Small script to toggle default path preview when switching base
+        echo '<script>(function($){
+            $(document).on("change", "select[data-uplg-base-select]", function(){
+                var wrap=$(this).closest("div");
+                var isDefault = !this.value;
+                wrap.find(".uplg-default-path").toggle(isDefault);
+            });
+        })(jQuery);</script>';
     }
 
     public function render_config_metabox($post): void {
@@ -602,19 +641,21 @@ class UpLibraryGenerator {
             return;
         }
 
-        // Save CPT generator definition
+        // Saving a CPT generator definition
         if ($post->post_type === 'uplg-cpt') {
             if (!isset($_POST['uplg_cpt_nonce']) || !wp_verify_nonce($_POST['uplg_cpt_nonce'], 'uplg_save_cpt')) return;
-            $slug = sanitize_title($_POST['_uplg_cpt_slug'] ?? '');
-            $sing = sanitize_text_field($_POST['_uplg_cpt_singular'] ?? '');
-            $plur = sanitize_text_field($_POST['_uplg_cpt_plural'] ?? '');
-            update_post_meta($post_id, '_uplg_cpt_slug', $slug);
-            update_post_meta($post_id, '_uplg_cpt_singular', $sing);
-            update_post_meta($post_id, '_uplg_cpt_plural', $plur);
-            // Re-register generated CPTs for this request
+            update_post_meta($post_id, '_uplg_cpt_slug', sanitize_title((string)($_POST['_uplg_cpt_slug'] ?? '')));
+            update_post_meta($post_id, '_uplg_cpt_singular', sanitize_text_field((string)($_POST['_uplg_cpt_singular'] ?? '')));
+            update_post_meta($post_id, '_uplg_cpt_plural', sanitize_text_field((string)($_POST['_uplg_cpt_plural'] ?? '')));
+            update_post_meta($post_id, '_uplg_cpt_gutenberg', isset($_POST['_uplg_cpt_gutenberg']) ? '1' : '0');
+            update_post_meta($post_id, '_uplg_cpt_disable_editor', isset($_POST['_uplg_cpt_disable_editor']) ? '1' : '0');
+            update_post_meta($post_id, '_uplg_cpt_disable_custom_fields', isset($_POST['_uplg_cpt_disable_custom_fields']) ? '1' : '0');
+            // Re-register generated CPTs for this request so the setting applies immediately
             $this->register_generated_cpts();
             return;
         }
+
+        // (removed duplicate unreachable block)
 
         if (!isset($_POST['uplg_meta_nonce']) || !wp_verify_nonce($_POST['uplg_meta_nonce'], 'uplg_save_meta')) return;
 
@@ -670,7 +711,9 @@ class UpLibraryGenerator {
             }
         }
 
+        // After saving metas, generate files for this post based on current configuration
         $this->generate_files($post_id, $conf);
+        return;
     }
 
     private function resolve_base_dir(array $opts): string {
@@ -690,6 +733,51 @@ class UpLibraryGenerator {
             $dir = trailingslashit(get_stylesheet_directory());
         }
         return $sub ? trailingslashit($dir . $sub) : $dir;
+    }
+
+    /**
+     * Compute the default target file path for a code meta, given plugin options and language.
+     */
+    private function build_default_code_target(array $opts, $post, string $file_name, string $lang): string {
+        $base_dir = wp_normalize_path($this->resolve_base_dir($opts));
+        $wrap = ($opts['wrap_subfolder'] ?? '1') === '1';
+        $root_dir = $wrap ? trailingslashit($base_dir . $file_name) : trailingslashit($base_dir);
+        $meta_root_dir = $root_dir;
+        $ext = '.php';
+        $dest_dir = $meta_root_dir;
+        if ($lang === 'js') {
+            $dest_dir = trailingslashit($meta_root_dir . 'assets/js');
+            $ext = '.js';
+        } elseif ($lang === 'scss') {
+            $dest_dir = trailingslashit($meta_root_dir . 'assets/scss');
+            $ext = '.scss';
+        } elseif ($lang === 'css') {
+            $dest_dir = $meta_root_dir;
+            $ext = '.css';
+        } else {
+            $dest_dir = $meta_root_dir;
+            $ext = '.php';
+        }
+        return wp_normalize_path($dest_dir . $file_name . $ext);
+    }
+
+    /**
+     * Convert an absolute path to a human-friendly prefix (theme://, plugin://, mu-plugins:// or relative to ABSPATH).
+     */
+    private function pretty_path(string $path): string {
+        $p = wp_normalize_path($path);
+        $map = [];
+        $theme = wp_normalize_path(trailingslashit(get_stylesheet_directory()));
+        $map[$theme] = 'theme://';
+        if (defined('WPMU_PLUGIN_DIR')) { $map[wp_normalize_path(trailingslashit(WPMU_PLUGIN_DIR))] = 'mu-plugins://'; }
+        $map[wp_normalize_path(trailingslashit(UPLG_PATH))] = 'plugin://';
+        if (defined('ABSPATH')) { $map[wp_normalize_path(trailingslashit(ABSPATH))] = '/'; }
+        foreach ($map as $prefix => $label) {
+            if ($prefix && strpos($p, $prefix) === 0) {
+                return $label . ltrim(substr($p, strlen($prefix)), '/');
+            }
+        }
+        return $p;
     }
 
     private function ensure_dir(string $path): void {
