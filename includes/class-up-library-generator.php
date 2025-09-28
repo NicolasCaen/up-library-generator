@@ -164,6 +164,9 @@ class UpLibraryGenerator {
         add_action('admin_post_uplg_export_all', [$this, 'handle_export_all']);
         add_action('admin_post_uplg_import_defaults', [$this, 'handle_import_defaults']);
         add_action('admin_post_uplg_open_cpt_settings', [$this, 'handle_open_cpt_settings']);
+
+        // Notices for bulk actions
+        add_action('admin_notices', [$this, 'maybe_show_bulk_notices']);
     }
 
     public function on_activate(): void {
@@ -798,7 +801,7 @@ class UpLibraryGenerator {
         return $scss; // fallback si librairie absente
     }
 
-    private function generate_files(int $post_id, array $opts): void {
+    private function generate_files(int $post_id, array $opts): int {
         $base_dir = wp_normalize_path($this->resolve_base_dir($opts));
         $file_name = get_post_meta($post_id, '_uplg_file_name', true) ?: ('item-' . $post_id);
         $wrap = $opts['wrap_subfolder'] === '1';
@@ -809,16 +812,16 @@ class UpLibraryGenerator {
 
         // Schema-based code metas → generate individual PHP files
         $conf_post = $this->get_conf_for_cpt(get_post_type($post_id));
+        $files_generated = 0;
         if (!empty($conf_post['meta_schema'])) {
             foreach ($conf_post['meta_schema'] as $row) {
                 $type = (string)($row['type'] ?? '');
                 if ($type !== 'code') { continue; }
                 $key  = (string)($row['key'] ?? '');
                 if (!$key) { continue; }
-                $flag_required = !empty($row['with_flag']);
+                // Strict rule: generate only if the per-meta checkbox "Générer le fichier" is checked
                 $gen_flag = get_post_meta($post_id, '_uplg_generate_meta_' . $key, true) === '1';
-                $should_gen = $flag_required ? $gen_flag : true;
-                if (!$should_gen) continue;
+                if (!$gen_flag) { continue; }
                 $code_meta = '_uplg_meta_' . $key;
                 $code = (string) get_post_meta($post_id, $code_meta, true);
                 $lang = isset($row['lang']) ? (string)$row['lang'] : 'php';
@@ -863,8 +866,10 @@ class UpLibraryGenerator {
                 $target = $dest_dir . $file_name . $ext;
                 $ok = @file_put_contents($target, $code);
                 if ($ok === false) { error_log('[UPLG] Echec écriture META PHP: ' . $target); }
+                else { $files_generated++; }
             }
         }
+        return $files_generated;
     }
 
     public function render_import_export_page(): void {
@@ -1079,6 +1084,7 @@ class UpLibraryGenerator {
             add_filter("bulk_actions-edit-{$pt}", function(array $actions) {
                 $actions['uplg_export_xml'] = __('Exporter (XML)', 'up-library-generator');
                 $actions['uplg_update_default_xml'] = __('Mettre à jour le fichier par défaut (XML)', 'up-library-generator');
+                $actions['uplg_generate_files'] = __('Générer les fichiers', 'up-library-generator');
                 return $actions;
             });
             add_filter("handle_bulk_actions-edit-{$pt}", function(string $redirect_to, string $doaction, array $post_ids) use ($pt) {
@@ -1107,6 +1113,37 @@ class UpLibraryGenerator {
                 $redirect_to = add_query_arg('uplg_default_updated', $success, $redirect_to);
                 return $redirect_to;
             }, 11, 3);
+
+            // Bulk generate files for selected posts
+            add_filter("handle_bulk_actions-edit-{$pt}", function(string $redirect_to, string $doaction, array $post_ids) use ($pt) {
+                if ($doaction !== 'uplg_generate_files') { return $redirect_to; }
+                if (!current_user_can('edit_posts')) { return $redirect_to; }
+                $conf = $this->get_conf_for_cpt($pt) ?: $this->opts;
+                $files_count = 0;
+                foreach ($post_ids as $pid) {
+                    $pid = (int) $pid;
+                    if ($pid > 0) {
+                        $files_count += (int) $this->generate_files($pid, $conf);
+                    }
+                }
+                return add_query_arg('uplg_files_generated', (string) $files_count, $redirect_to);
+            }, 12, 3);
+        }
+    }
+
+    /**
+     * Show notices on list screens for our custom bulk actions.
+     */
+    public function maybe_show_bulk_notices(): void {
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || $screen->base !== 'edit') { return; }
+        if (isset($_GET['uplg_files_generated'])) {
+            $f = (int) $_GET['uplg_files_generated'];
+            if ($f > 0) {
+                echo '<div class="notice notice-success is-dismissible"><p>' . esc_html(sprintf(_n('%d fichier généré.', '%d fichiers générés.', $f, 'up-library-generator'), $f)) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__("Aucun fichier généré (aucune case 'Générer le fichier' n\'était cochée).", 'up-library-generator') . '</p></div>';
+            }
         }
     }
 
