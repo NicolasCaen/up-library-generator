@@ -100,6 +100,15 @@ class UpLibraryGenerator {
                 }
             }
         }
+
+        // Show notice after importing defaults via admin-post redirect
+        if (isset($_GET['import'])) {
+            if (sanitize_text_field($_GET['import']) === '1') {
+                $notice = '<div class="notice notice-success"><p>' . esc_html__('Import du fichier par défaut effectué.', 'up-library-generator') . '</p></div>';
+            } else {
+                $notice = '<div class="notice notice-error"><p>' . esc_html__('Échec de l\'import du fichier par défaut.', 'up-library-generator') . '</p></div>';
+            }
+        }
     }
 
     private function __construct() {
@@ -116,10 +125,6 @@ class UpLibraryGenerator {
         add_action('add_meta_boxes', [$this, 'register_metabox']);
         add_action('save_post', [$this, 'handle_save_post'], 10, 2);
 
-        add_action('admin_post_uplg_export_all', [$this, 'handle_export_all']);
-        add_action('admin_post_uplg_import_defaults', [$this, 'handle_import_defaults']);
-        add_action('admin_post_uplg_open_cpt_settings', [$this, 'handle_open_cpt_settings']);
-
         // Add a tools panel inside the tablenav for up_* CPTs (we'll move it before bulk actions)
         add_action('restrict_manage_posts', [$this, 'render_up_list_tools_inline'], 5);
 
@@ -129,6 +134,11 @@ class UpLibraryGenerator {
         // Early redirect for per-CPT settings pseudo-pages under edit.php (run very early too)
         add_action('admin_init', [$this, 'maybe_redirect_cpt_settings'], 1);
         add_action('load-edit.php', [$this, 'maybe_redirect_cpt_settings']);
+
+        // Admin-post endpoints for actions triggered from Import/Export UI and inline gear
+        add_action('admin_post_uplg_export_all', [$this, 'handle_export_all']);
+        add_action('admin_post_uplg_import_defaults', [$this, 'handle_import_defaults']);
+        add_action('admin_post_uplg_open_cpt_settings', [$this, 'handle_open_cpt_settings']);
     }
 
     public function on_activate(): void {
@@ -834,9 +844,20 @@ class UpLibraryGenerator {
     public function handle_import_defaults(): void {
         if (!current_user_can('manage_options')) wp_die(esc_html__('Permissions insuffisantes.', 'up-library-generator'));
         check_admin_referer('uplg_import_defaults');
-        $result = $this->import_defaults_from_plugin();
+        // Resolve CPT from POST, GET or referer as fallback
+        $cpt = isset($_POST['post_type']) ? sanitize_text_field($_POST['post_type']) : '';
+        if (!$cpt && isset($_GET['post_type'])) { $cpt = sanitize_text_field($_GET['post_type']); }
+        if (!$cpt && !empty($_SERVER['HTTP_REFERER'])) {
+            $ref = wp_parse_url((string)$_SERVER['HTTP_REFERER']);
+            if (!empty($ref['query'])) {
+                parse_str($ref['query'], $q);
+                if (!empty($q['post_type'])) { $cpt = sanitize_text_field($q['post_type']); }
+            }
+        }
+        if (!$cpt) { $cpt = (string)($this->opts['target_cpt'] ?? ''); }
+        $result = $this->import_defaults_from_plugin($cpt);
         $url = add_query_arg([
-            'post_type' => sanitize_text_field($_GET['post_type'] ?? ($this->opts['target_cpt'] ?? '')),
+            'post_type' => $cpt,
             'page'      => 'uplg-import-export',
             'import'    => is_wp_error($result) ? '0' : '1',
         ], admin_url('edit.php'));
@@ -972,6 +993,7 @@ class UpLibraryGenerator {
             if (in_array($pt, $exclude, true)) { continue; }
             add_filter("bulk_actions-edit-{$pt}", function(array $actions) {
                 $actions['uplg_export_xml'] = __('Exporter (XML)', 'up-library-generator');
+                $actions['uplg_update_default_xml'] = __('Mettre à jour le fichier par défaut (XML)', 'up-library-generator');
                 return $actions;
             });
             add_filter("handle_bulk_actions-edit-{$pt}", function(string $redirect_to, string $doaction, array $post_ids) use ($pt) {
@@ -982,6 +1004,24 @@ class UpLibraryGenerator {
                 $this->send_download($filename, $xml, 'application/xml; charset=utf-8');
                 exit;
             }, 10, 3);
+
+            // Handle updating default XML from selection
+            add_filter("handle_bulk_actions-edit-{$pt}", function(string $redirect_to, string $doaction, array $post_ids) use ($pt) {
+                if ($doaction !== 'uplg_update_default_xml') { return $redirect_to; }
+                // Require higher capability since we write into the plugin's defaults
+                if (!current_user_can('manage_options')) { return add_query_arg('uplg_default_updated', '0', $redirect_to); }
+                $xml = $this->export_selected_to_xml($pt, $post_ids);
+                // Determine default file path (same convention as import_defaults_from_plugin)
+                $default = UPLG_PATH . 'defaults/' . sanitize_title($pt) . '.xml';
+                $file = (string) apply_filters('uplg_plugin_default_xml_path', $default, $pt);
+                // Ensure directory exists
+                $dir = wp_normalize_path(trailingslashit(dirname($file)));
+                if (!is_dir($dir)) { wp_mkdir_p($dir); }
+                $ok = @file_put_contents($file, $xml);
+                $success = ($ok !== false) ? '1' : '0';
+                $redirect_to = add_query_arg('uplg_default_updated', $success, $redirect_to);
+                return $redirect_to;
+            }, 11, 3);
         }
     }
 
@@ -1155,8 +1195,8 @@ class UpLibraryGenerator {
         return $count;
     }
 
-    private function import_defaults_from_plugin() {
-        $cpt = sanitize_text_field($_GET['post_type'] ?? ($this->opts['target_cpt'] ?? ''));
+    private function import_defaults_from_plugin(string $cpt = '') {
+        $cpt = $cpt ?: sanitize_text_field($_POST['post_type'] ?? ($_GET['post_type'] ?? ($this->opts['target_cpt'] ?? '')));
         if (!$cpt) return new \WP_Error('uplg_no_cpt', __('Aucun CPT sélectionné.', 'up-library-generator'));
         $default = UPLG_PATH . 'defaults/' . sanitize_title($cpt) . '.xml';
         $file = (string) apply_filters('uplg_plugin_default_xml_path', $default, $cpt);
