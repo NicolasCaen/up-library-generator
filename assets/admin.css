@@ -1,3 +1,18 @@
 /* Admin styles for UP Library Generator */
 #uplg_code_fields textarea { font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 #uplg_code_fields label strong { display:block; margin:8px 0 4px; }
+
+/* Two-column grid for dynamic metas */
+.uplg-grid-2cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-gap: 16px;
+}
+.uplg-grid-col { width: 100%; }
+.uplg-col-1 { grid-column: span 1; }
+.uplg-col-2 { grid-column: span 2; }
+
+/* Schema table */
+.uplg-schema-table th, .uplg-schema-table td { vertical-align: middle; }
+.uplg-schema-table input[type="text"] { width: 100%; }
+.uplg-schema-table select { width: 100%; }

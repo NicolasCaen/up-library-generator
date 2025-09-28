@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uplg_items>
+  <item>
+    <post>
+      <title>Exemple Configuration Library Generator</title>
+      <slug>exemple-configuration-library-generator</slug>
+      <status>publish</status>
+      <content><![CDATA[Configuration d'exemple pour enrichir un CPT cible avec des champs de code et génération de fichiers.]]></content>
+    </post>
+    <meta>
+      <meta_key name="_uplg_conf_target_cpt"><![CDATA[post]]></meta_key>
+      <meta_key name="_uplg_conf_fields"><![CDATA[{"php":{"enabled":true,"with_flag":true},"js":{"enabled":true,"with_flag":true},"scss":{"enabled":true,"with_flag":true},"css":{"enabled":false,"with_flag":false}}]]></meta_key>
+      <meta_key name="_uplg_conf_base_location">theme</meta_key>
+      <meta_key name="_uplg_conf_relative_subdir">library</meta_key>
+      <meta_key name="_uplg_conf_wrap_subfolder">1</meta_key>
+      <meta_key name="_uplg_conf_custom_directory"><![CDATA[]]></meta_key>
+    </meta>
+  </item>
+</uplg_items>
