@@ -26,6 +26,10 @@ Créez un élément dans `CPT config` pour définir une configuration par CPT ci
 - `Schéma des metas` — ajoutez des lignes avec:
   - Label, slug (clé), type (`code` / `texte` / `checkbox`), colonne (1/2)
   - Pour `code`: langue (php/js/scss/css), option "Générer le fichier" et possibilité d’activer un chemin personnalisé par méta
+  - Emplacements par défaut des fichiers générés:
+    - PHP et CSS à la racine
+    - JS dans `assets/js`
+    - SCSS dans `assets/scss`
 
 Chaque configuration active automatiquement la metabox et l’enqueue de CodeMirror sur le CPT ciblé.
 
@@ -33,6 +37,7 @@ Chaque configuration active automatiquement la metabox et l’enqueue de CodeMir
 
 - `CPT cible` — type de contenu à enrichir.
 - `Emplacement des fichiers générés` — base (thème / mu-plugins / plugin / personnalisé) + `Sous-dossier relatif` + option "Créer un sous-dossier par élément".
+  - Astuce: laissez vide ou entrez `/` pour ne pas utiliser de sous-dossier relatif.
 - `Chemin personnalisé` — utilisé uniquement si la base = personnalisé.
 - `Schéma des metas` — définit tous les champs affichés dans la metabox du CPT cible.
 

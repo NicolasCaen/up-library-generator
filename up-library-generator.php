@@ -2,7 +2,7 @@
 /**
  * Plugin Name: UP Library Generator
  * Description: Générateur générique de bibliothèques pour n'importe quel CPT: champs code avec CodeMirror, génération de fichiers, import/export et XML par défaut.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Author: Nicolas Gehin
  * Text Domain: up-library-generator
  */
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constantes
-define('UPLG_VERSION', '0.2.0');
+define('UPLG_VERSION', '0.3.0');
 define('UPLG_PATH', plugin_dir_path(__FILE__));
 define('UPLG_URL', plugin_dir_url(__FILE__));
 

@@ -9,6 +9,16 @@
         var cm = ed && ed.codemirror ? ed.codemirror : null;
         if (cm) {
           $(textarea).data('uplgCM', cm);
+          // Continuously mirror CodeMirror content back to the underlying textarea
+          try {
+            cm.on('change', function(inst){
+              try {
+                textarea.value = inst.getValue();
+              } catch(e){}
+            });
+            // Ensure initial sync as well
+            try { textarea.value = cm.getValue(); } catch(e){}
+          } catch(e){}
         }
       } catch(e){}
       return ed;

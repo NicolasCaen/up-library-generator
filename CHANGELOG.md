@@ -1,5 +1,18 @@
 # Changelog — UP Library Generator
 
+## [0.3.0] — 2025-09-28
+### Modifié
+- Synchronisation du contenu CodeMirror → textarea (évite la perte des champs `code`).
+- Correction de l’état de la case « Créer un sous-dossier par élément » (préserve la valeur « 0 » sauvegardée).
+- Chemins de sortie par défaut pour le schéma dynamique:
+  - PHP et CSS à la racine
+  - JS dans `assets/js`
+  - SCSS dans `assets/scss`
+- Nommage des fichiers pour metas `code`: suppression du suffixe slug de la méta (`<file_name>.<ext>` uniquement).
+- Aides UI sur la page de config:
+  - Rappel: vide ou « / » = pas de sous-dossier relatif
+  - Rappel des emplacements par défaut (PHP/CSS racine, JS et SCSS sous `assets/...`).
+
 ## [0.2.0] — 2025-09-28
 ### Modifié
 - Remplacement de la page de réglages globale par des réglages par CPT via un post `library-generator` dédié.

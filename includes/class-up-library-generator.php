@@ -199,13 +199,22 @@ class UpLibraryGenerator {
         $meta_schema = get_post_meta($post_id, '_uplg_conf_meta_schema', true);
         $meta_schema = is_array($meta_schema) ? $meta_schema : [];
         $defaults = $this->default_options();
+
+        // Retrieve metas with care to preserve string '0' values
+        $target_cpt = get_post_meta($post_id, '_uplg_conf_target_cpt', true);
+        $base_location = get_post_meta($post_id, '_uplg_conf_base_location', true);
+        $relative_subdir = get_post_meta($post_id, '_uplg_conf_relative_subdir', true);
+        $wrap_subfolder = get_post_meta($post_id, '_uplg_conf_wrap_subfolder', true);
+        $custom_directory = get_post_meta($post_id, '_uplg_conf_custom_directory', true);
+
         return [
-            'target_cpt'       => get_post_meta($post_id, '_uplg_conf_target_cpt', true) ?: '',
+            'target_cpt'       => ($target_cpt !== '') ? $target_cpt : '',
             'fields'           => wp_parse_args($fields, $defaults['fields']),
-            'base_location'    => get_post_meta($post_id, '_uplg_conf_base_location', true) ?: $defaults['base_location'],
-            'relative_subdir'  => get_post_meta($post_id, '_uplg_conf_relative_subdir', true) ?: $defaults['relative_subdir'],
-            'wrap_subfolder'   => get_post_meta($post_id, '_uplg_conf_wrap_subfolder', true) ?: $defaults['wrap_subfolder'],
-            'custom_directory' => get_post_meta($post_id, '_uplg_conf_custom_directory', true) ?: $defaults['custom_directory'],
+            'base_location'    => ($base_location !== '') ? $base_location : $defaults['base_location'],
+            'relative_subdir'  => ($relative_subdir !== '') ? $relative_subdir : $defaults['relative_subdir'],
+            // Important: keep '0' when saved, only fallback if truly absent
+            'wrap_subfolder'   => ($wrap_subfolder !== '') ? $wrap_subfolder : $defaults['wrap_subfolder'],
+            'custom_directory' => ($custom_directory !== '') ? $custom_directory : $defaults['custom_directory'],
             'meta_schema'      => $meta_schema,
         ];
     }
@@ -440,8 +449,14 @@ class UpLibraryGenerator {
         }
         echo '</label></p>';
 
-        echo '<p><label>' . esc_html__('Sous-dossier relatif', 'up-library-generator') . ' <input type="text" name="_uplg_conf_relative_subdir" value="' . esc_attr($conf['relative_subdir']) . '" placeholder="library"></label></p>';
+        echo '<p><label>' . esc_html__('Sous-dossier relatif', 'up-library-generator') . ' <input type="text" name="_uplg_conf_relative_subdir" value="' . esc_attr($conf['relative_subdir']) . '" placeholder="library"></label><br/>';
+        echo '<span class="description">' . esc_html__('Laissez vide ou entrez "/" pour ne pas utiliser de sous-dossier.', 'up-library-generator') . '</span></p>';
         echo '<p><label><input type="checkbox" name="_uplg_conf_wrap_subfolder" ' . checked($conf['wrap_subfolder'], '1', false) . '> ' . esc_html__('Créer un sous-dossier par élément (recommandé)', 'up-library-generator') . '</label></p>';
+        echo '<p class="description">' . esc_html__('Emplacements par défaut des fichiers générés :', 'up-library-generator') . '<br/>'
+            . esc_html__('• PHP et CSS : à la racine du dossier de l’élément', 'up-library-generator') . '<br/>'
+            . esc_html__('• JS : sous assets/js', 'up-library-generator') . '<br/>'
+            . esc_html__('• SCSS : sous assets/scss', 'up-library-generator')
+            . '</p>';
         echo '<p><label>' . esc_html__('Chemin personnalisé (si sélectionné)', 'up-library-generator') . ' <input type="text" name="_uplg_conf_custom_directory" value="' . esc_attr($conf['custom_directory']) . '" size="70"></label></p>';
 
         // Meta schema repeater
@@ -588,7 +603,11 @@ class UpLibraryGenerator {
         // Regular post in a configured CPT
         $cpt = $post->post_type;
         $conf = $this->get_conf_for_cpt($cpt);
-        if (!$conf) return;
+        if (!$conf) {
+            error_log('[UPLG DEBUG] handle_save_post: no conf for CPT ' . $cpt . ' (post ' . $post_id . ')');
+            return;
+        }
+        error_log('[UPLG DEBUG] handle_save_post: saving metas for CPT ' . $cpt . ' (post ' . $post_id . ')');
 
         $file_name = sanitize_title((string)($_POST['_uplg_file_name'] ?? ''));
         if (!$file_name) { $file_name = sanitize_title($post->post_name ?: ('item-' . $post_id)); }
@@ -604,8 +623,17 @@ class UpLibraryGenerator {
                 if ($type === 'checkbox') {
                     update_post_meta($post_id, $meta_key, isset($_POST[$meta_key]) ? '1' : '0');
                 } else {
+                    $raw_present = array_key_exists($meta_key, $_POST) ? 'yes' : 'no';
                     $val = (string) wp_unslash($_POST[$meta_key] ?? '');
+                    if ($type === 'code') {
+                        $len = strlen($val);
+                        error_log('[UPLG DEBUG] code meta ' . $meta_key . ' present_in_post=' . $raw_present . ' length=' . $len);
+                    }
                     update_post_meta($post_id, $meta_key, $val);
+                    if ($type === 'code') {
+                        $saved = (string) get_post_meta($post_id, $meta_key, true);
+                        error_log('[UPLG DEBUG] code meta saved ' . $meta_key . ' length=' . strlen($saved));
+                    }
                 }
                 if ($type === 'code') {
                     if (!empty($row['with_flag'])) {
@@ -713,7 +741,20 @@ class UpLibraryGenerator {
                     $meta_root_dir = $opts['wrap_subfolder'] === '1' ? trailingslashit($meta_base_dir . $file_name) : trailingslashit($meta_base_dir);
                     $this->ensure_dir($meta_root_dir);
                 }
-                $target = $meta_root_dir . $file_name . '-' . sanitize_file_name($key) . $ext;
+                // Destination rules:
+                // - php, css at root
+                // - js -> assets/js
+                // - scss -> assets/scss
+                $dest_dir = $meta_root_dir;
+                if ($lang === 'js') {
+                    $dest_dir = trailingslashit($meta_root_dir . 'assets/js');
+                    $this->ensure_dir($dest_dir);
+                } elseif ($lang === 'scss') {
+                    $dest_dir = trailingslashit($meta_root_dir . 'assets/scss');
+                    $this->ensure_dir($dest_dir);
+                }
+                // File naming: do not suffix with meta slug; use only base file name + extension
+                $target = $dest_dir . $file_name . $ext;
                 $ok = @file_put_contents($target, $code);
                 if ($ok === false) { error_log('[UPLG] Echec écriture META PHP: ' . $target); }
             }
