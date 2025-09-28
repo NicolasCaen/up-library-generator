@@ -967,10 +967,7 @@ class UpLibraryGenerator {
                 echo '<a class="uplg-gear-link" href="' . esc_url($settings_url) . '" title="' . esc_attr__('Réglages Library Generator', 'up-library-generator') . '">';
         echo '<span class="dashicons dashicons-admin-generic"></span>';
         echo '</a>';
-        echo '<a class="button button-primary" href="' . esc_url($export_url) . '" style="margin-right:8px;">' . esc_html__('Exporter (XML)', 'up-library-generator') . '</a>';
-
-   
-        echo '<a class="button" href="' . esc_url(admin_url('edit.php?post_type=' . $cpt . '&page=uplg-import-export')) . '">' . esc_html__('Ouvrir Import/Export', 'up-library-generator') . '</a>';
+        echo '<a class="button" href="' . esc_url(admin_url('edit.php?post_type=' . $cpt . '&page=uplg-import-export')) . '">' . esc_html__('I/E', 'up-library-generator') . '</a>';
         echo '</span>';
         echo '<script>(function(){
             var tools=document.getElementById("uplg-tools-inline");
