@@ -16,3 +16,52 @@
 .uplg-schema-table th, .uplg-schema-table td { vertical-align: middle; }
 .uplg-schema-table input[type="text"] { width: 100%; }
 .uplg-schema-table select { width: 100%; }
+
+/* Inline tools: ensure dashicon (gear) is centered vertically within button */
+#uplg-tools-inline .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+#uplg-tools-inline .button .dashicons {
+  line-height: 1;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+/* Simple gear link (no button class) */
+#uplg-tools-inline a.uplg-gear-link,
+#uplg-tools-inline a.uplg-gear-link:link,
+#uplg-tools-inline a.uplg-gear-link:visited,
+#uplg-tools-inline a.uplg-gear-link:hover,
+#uplg-tools-inline a.uplg-gear-link:focus,
+#uplg-tools-inline a.uplg-gear-link:active,
+#uplg-tools-inline a.uplg-gear-link:focus-visible {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none !important;
+  border-bottom: none !important;
+  margin-right: 1em;
+  color: lightgrey !important;
+  padding: .1em !important;
+  display: inline-flex;
+    height: 24px;
+}
+#uplg-tools-inline .uplg-gear-link .dashicons {
+  line-height: 1;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  text-decoration: none;
+  color: lightgrey;
+}
+
+/* Explicitly enforce no underline on hover/focus as well */
+#uplg-tools-inline a.uplg-gear-link:hover,
+#uplg-tools-inline a.uplg-gear-link:focus,
+#uplg-tools-inline a.uplg-gear-link:active,
+#uplg-tools-inline a.uplg-gear-link:focus-visible {
+  text-decoration: none !important;
+  border-bottom: none !important;
+}

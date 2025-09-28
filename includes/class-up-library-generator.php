@@ -313,12 +313,20 @@ class UpLibraryGenerator {
         $enabled_cpts = array_keys($this->config_map);
         if (empty($enabled_cpts) && !empty($this->opts['target_cpt'])) { $enabled_cpts = [$this->opts['target_cpt']]; }
         $is_post_edit = in_array($hook, ['post.php', 'post-new.php'], true);
+        $is_list_screen = ($hook === 'edit.php') || ($screen && $screen->base === 'edit');
         $is_target_cpt = $screen && in_array($screen->post_type, $enabled_cpts, true);
         $is_conf_cpt = $screen && $screen->post_type === 'library-generator';
 
-        if ($screen && $is_post_edit && ($is_target_cpt || $is_conf_cpt)) {
-            // Always enqueue our admin UI
+        // Always enqueue base admin CSS on CPT list screens (edit.php) where inline tools are rendered
+        if ($screen && $is_list_screen) {
             wp_enqueue_style('uplg-admin', UPLG_URL . 'assets/admin.css', [], UPLG_VERSION);
+        }
+
+        if ($screen && $is_post_edit && ($is_target_cpt || $is_conf_cpt)) {
+            // Enqueue admin UI on edit screens
+            if (!wp_style_is('uplg-admin', 'enqueued')) {
+                wp_enqueue_style('uplg-admin', UPLG_URL . 'assets/admin.css', [], UPLG_VERSION);
+            }
             // Enqueue code editor only for target CPT edit pages
             $deps = ['jquery'];
             if ($is_target_cpt) {
@@ -935,10 +943,12 @@ class UpLibraryGenerator {
             'post_type' => $cpt,
         ], admin_url('admin-post.php'));
         echo '<span id="uplg-tools-inline" class="alignleft actions" style="margin-right:8px;">';
-        echo '<a class="button button-primary" href="' . esc_url($export_url) . '" style="margin-right:8px;">' . esc_html__('Exporter (XML)', 'up-library-generator') . '</a>';
-        echo '<a class="button" href="' . esc_url($settings_url) . '" title="' . esc_attr__('Réglages Library Generator', 'up-library-generator') . '" style="margin-right:8px;">';
-        echo '<span class="dashicons dashicons-admin-generic" style="line-height:inherit; vertical-align:middle;"></span>';
+                echo '<a class="uplg-gear-link" href="' . esc_url($settings_url) . '" title="' . esc_attr__('Réglages Library Generator', 'up-library-generator') . '">';
+        echo '<span class="dashicons dashicons-admin-generic"></span>';
         echo '</a>';
+        echo '<a class="button button-primary" href="' . esc_url($export_url) . '" style="margin-right:8px;">' . esc_html__('Exporter (XML)', 'up-library-generator') . '</a>';
+
+   
         echo '<a class="button" href="' . esc_url(admin_url('edit.php?post_type=' . $cpt . '&page=uplg-import-export')) . '">' . esc_html__('Ouvrir Import/Export', 'up-library-generator') . '</a>';
         echo '</span>';
         echo '<script>(function(){
